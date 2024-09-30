@@ -659,7 +659,6 @@ class Net(nn.Module):
                 pred_ratings_single_id_freeze = self.predictor_interaction_single_id(user_embeddings_single_id * item_embeddings_single_id_freeze)
         # ------------------------------------------------------------------------------------------------------------
 
-        # ------------ freeze --------------------------------------------------------------------
         loss_kd_feat = self.get_loss_sim_inf(feat_single, rst_re_single)+ \
                        self.get_loss_sim_inf(feat_single, rst_id_single) + \
                        self.get_loss_sim_inf(rst_re_freeze, rst_id_single)
