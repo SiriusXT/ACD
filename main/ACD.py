@@ -465,7 +465,7 @@ class GCN_interaction_all(nn.Module):
 
 
 
-        g.srcdata['r_fe3'] = g.srcdata['h_re']#self.review_1(g.srcdata['h_re'])
+        g.srcdata['r_fe3'] = self.review_1(g.srcdata['h_re']) 
         g.update_all(lambda edges: {
             'm': (torch.cat([edges.src['r_fe3']], -1) * (edges.data['s1'])) * self.dropout(edges.src['ci'])},
                      fn.sum(msg='m', out='h'))
@@ -479,7 +479,7 @@ class GCN_interaction_all(nn.Module):
             rst_re_freeze = g.dstdata['h'] * g.dstdata['ci']
 
         g.srcdata['h_r_2'] = self.feature2
-        g.srcdata['r_fe2'] = g.srcdata['h_re'] #self.review_2()
+        g.srcdata['r_fe2'] = self.review_2(g.srcdata['h_re'])  
         g.update_all(lambda edges: {
             'm': ((edges.src['h_r_2'] + edges.src['r_fe2']) * (edges.data['s2'])) * self.dropout(edges.src['ci'])},
                      fn.sum(msg='m', out='h'))
