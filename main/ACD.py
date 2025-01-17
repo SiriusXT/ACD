@@ -460,10 +460,6 @@ class GCN_interaction_all(nn.Module):
         g.edata['s1'] = self.score_1(g.edata['score'] - 1)
         g.edata['s2'] = self.score_2(g.edata['score'] - 1)
         g.edata['s3'] = self.score_3(g.edata['score'] - 1)
-        g.edata['s4'] = self.score_4(g.edata['score'] - 1)
-        g.edata['s5'] = self.score_5(g.edata['score'] - 1)
-
-
 
         g.srcdata['r_fe3'] = self.review_1(g.srcdata['h_re']) 
         g.update_all(lambda edges: {
