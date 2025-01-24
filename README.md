@@ -11,7 +11,7 @@ dgl == 0.7.2
 pytorch == 1.10.2
 ```
 
-## Data prepration
+## Running the code
 
 1. Run word2vector.py for word embedding. Glove pretraining weight is required. 
 2. Make sure can run load_sentiment_data in load_data.py 
