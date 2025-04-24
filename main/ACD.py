@@ -655,10 +655,10 @@ class Net(nn.Module):
                 pred_ratings_single_id_freeze = self.predictor_interaction_single_id(user_embeddings_single_id * item_embeddings_single_id_freeze)
         # ------------------------------------------------------------------------------------------------------------
 
-        loss_kd_feat = self.get_loss_sim_inf(feat_single, rst_re_single)+ \
+        loss_dis_feat = self.get_loss_sim_inf(feat_single, rst_re_single)+ \
                        self.get_loss_sim_inf(feat_single, rst_id_single) + \
-                       self.get_loss_sim_inf(rst_re_freeze, rst_id_single)
-        return pred_ratings_single, pred_ratings_single_freeze, pred_ratings_single_re, pred_ratings_single_id,  (loss_kd_feat)/ 1 ,  \
+                       self.get_loss_sim_inf(rst_re_single, rst_id_single)
+        return pred_ratings_single, pred_ratings_single_freeze, pred_ratings_single_re, pred_ratings_single_id,  loss_dis_feat ,  \
             pred_ratings_single_re_freeze, pred_ratings_single_id_freeze,
 
 def evaluate(args, net, mlp_net, dataset, flag='valid', add=False, epoch=256, beta=1):
@@ -671,9 +671,9 @@ def evaluate(args, net, mlp_net, dataset, flag='valid', add=False, epoch=256, be
     with torch.no_grad():
         r_list = r_list.cpu().numpy()
         if epoch <= g_epoch:
-            pred_ratings_single, pred_ratings_single_freeze, pred_ratings_single_re, pred_ratings_single_id, loss_kd_feat,  \
+            pred_ratings_single, pred_ratings_single_freeze, pred_ratings_single_re, pred_ratings_single_id, loss_dis_feat,  \
                 pred_ratings_single_re_freeze, pred_ratings_single_id_freeze,  \
-                = net(dataset.train_enc_graph, u_list, i_list, freeze=" ")  # 冻结用户
+                = net(dataset.train_enc_graph, u_list, i_list, freeze=" ") 
         else:
             pred_ratings, pred_ratings_review, _ = net(dataset.train_enc_graph_updated, u_list, i_list)
 
@@ -777,11 +777,11 @@ def train(params):
             batch_item = i_list[idx]
             batch_rating = r_list[idx]
             if iter_idx <= g_epoch:
-                pred_ratings_single, pred_ratings_single_freeze, pred_ratings_single_re, pred_ratings_single_id, loss_kd_feat\
+                pred_ratings_single, pred_ratings_single_freeze, pred_ratings_single_re, pred_ratings_single_id, loss_dis_feat\
                     , pred_ratings_single_re_freeze, pred_ratings_single_id_freeze \
                     = net(dataset.train_enc_graph, batch_user, batch_item, is_training=True)
             else:
-                pred_ratings, pred_ratings_review, loss_kd_feat = net(dataset.train_enc_graph_updated, batch_user, batch_item)
+                pred_ratings, pred_ratings_review, loss_dis_feat = net(dataset.train_enc_graph_updated, batch_user, batch_item)
 
             real_pred_ratings = ((torch.softmax(pred_ratings_single, dim=1)) * nd_possible_rating_values.view(1, -1)).sum(dim=1)
 
@@ -801,24 +801,16 @@ def train(params):
                  torch.sigmoid(pred_ratings_single_re_freeze.detach()), \
                  torch.sigmoid(pred_ratings_single_id_freeze.detach()), \
                  torch.sigmoid(pred_ratings_single_ra_freeze.detach())
-            ave_f = (id + re + re_id) / 3 - beta * (ref + idf + re_id_f) / 3
-            loss_kd_s_id_re = kd_kl_loss(torch.softmax(ave_f, dim=-1), torch.softmax(id - beta * idf, dim=-1)) + \
-                              kd_kl_loss(torch.softmax(ave_f, dim=-1), torch.softmax(re - beta * ref, dim=-1)) + \
-                              kd_kl_loss(torch.softmax(ave_f, dim=-1), torch.softmax(re_id - beta * re_id_f, dim=-1))
+            loss_kd_s_id_re = kd_kl_loss(torch.softmax(re_id - beta * re_id_f, dim=-1), torch.softmax(id - beta * idf, dim=-1)) + \
+                              kd_kl_loss(torch.softmax(id - beta * idf, dim=-1), torch.softmax(re - beta * ref, dim=-1)) + \
+                              kd_kl_loss(torch.softmax(re - beta * ref, dim=-1), torch.softmax(re_id - beta * re_id_f, dim=-1))
 
-            loss_kd_s_id_re/=1
-            loss_kd_s_id_re /= 1
-            loss_final = loss_s + loss_s_re + loss_s_id + loss_kd_feat  + loss_kd_s_id_re
+
+            loss_final = loss_s + loss_s_re + loss_s_id + loss_dis_feat  + loss_kd_s_id_re
             optimizer.zero_grad()
             loss_final.backward()
             optimizer.step()
-            #>>>
-            ave_f = (id + re + re_id) / 3
-            loss_kd_s_id_re1 = kd_mse_loss(torch.softmax(ave_f, dim=-1), torch.softmax(id, dim=-1)) + \
-                              kd_mse_loss(torch.softmax(ave_f, dim=-1), torch.softmax(re, dim=-1)) + \
-                              kd_mse_loss(torch.softmax(ave_f, dim=-1), torch.softmax(re_id, dim=-1))
-            print(f"loss_kd_s_id_re:{loss_kd_s_id_re},loss_kd_s_id_re1:{loss_kd_s_id_re1}")
-            #<<<
+
             # Alternate training, second
             if 0 == 1:
                 beta = alpha
@@ -827,20 +819,9 @@ def train(params):
                     torch.sigmoid(pred_ratings_single_re_freeze.detach()), \
                     torch.sigmoid(pred_ratings_single_id_freeze.detach()), \
                     torch.sigmoid(pred_ratings_single_ra_freeze.detach())
-                ave_f = (id + re + re_id) / 3 - beta * (ref + idf + re_id_f) / 3
-                # loss_kd_s_id_re = kd_l1_loss(torch.softmax(ave_f, dim=-1), torch.softmax((re - beta * ref), dim=-1)) + \
-                #                   kd_l1_loss(torch.softmax(ave_f, dim=-1), torch.softmax((id - beta * idf), dim=-1)) + \
-                #                   kd_l1_loss(torch.softmax(ave_f, dim=-1), torch.softmax((re_id - beta * re_id_f), dim=-1))
-                # loss_kd_s_id_re += kd_mse_loss(torch.softmax(ave_f, dim=-1), torch.softmax((re - beta * ref), dim=-1)) + \
-                #                    kd_mse_loss(torch.softmax(ave_f, dim=-1), torch.softmax((id - beta * idf), dim=-1)) + \
-                #                    kd_mse_loss(torch.softmax(ave_f, dim=-1), torch.softmax((re_id - beta * re_id_f), dim=-1))
-                loss_kd_s_id_re = kd_l1_loss(torch.softmax(re_id - beta * re_id_f, dim=-1), torch.softmax(re - beta * ref, dim=-1)) + \
-                                  kd_l1_loss(torch.softmax(re_id - beta * re_id_f, dim=-1), torch.softmax(id - beta * idf, dim=-1)) #+ \
-                                  # kd_l1_loss(torch.softmax(re - beta * ref, dim=-1), torch.softmax(id - beta * idf, dim=-1))
-                loss_kd_s_id_re += kd_mse_loss(torch.softmax(re_id - beta * re_id_f, dim=-1), torch.softmax(re - beta * ref, dim=-1)) + \
-                                   kd_mse_loss(torch.softmax(re_id - beta * re_id_f, dim=-1), torch.softmax(id - beta * idf, dim=-1)) + \
-                                   kd_mse_loss(torch.softmax(re - beta * ref, dim=-1), torch.softmax(id - beta * idf, dim=-1))
-                loss_kd_s_id_re /= 2
+                loss_kd_s_id_re = kd_kl_loss(torch.softmax(re_id - beta * re_id_f, dim=-1), torch.softmax(id - beta * idf, dim=-1)) + \
+                              kd_kl_loss(torch.softmax(id - beta * idf, dim=-1), torch.softmax(re - beta * ref, dim=-1)) + \
+                              kd_kl_loss(torch.softmax(re - beta * ref, dim=-1), torch.softmax(re_id - beta * re_id_f, dim=-1))
                 loss_final = loss_kd_s_id_re
                 optimizer2.zero_grad()
                 loss_final.backward()
@@ -865,9 +846,9 @@ def train(params):
             if no_better_valid > params.train_early_stopping_patience :
                 print("Early stopping threshold reached. Stop training.")
                 break
-        # loss_s + loss_s_re + loss_s_id + loss_kd_feat + loss_kd_s_id_re
+        # loss_s + loss_s_re + loss_s_id + loss_dis_feat + loss_kd_s_id_re
         print(
-            f'Epoch {iter_idx}, {loss_s+loss_s_re+loss_s_id:.4f}, {loss_kd_feat:.4f},{loss_kd_s_id_re:.4f}, Train_MSE={train_mse:.4f}, Test_MSE={test_mse:.4f}, Test_MAE={test_mae:.4f}')
+            f'Epoch {iter_idx}, {loss_s+loss_s_re+loss_s_id:.4f}, {loss_dis_feat:.4f},{loss_kd_s_id_re:.4f}, Train_MSE={train_mse:.4f}, Test_MSE={test_mse:.4f}, Test_MAE={test_mae:.4f}')
         result.append(test_mse)
     print(f'Best Iter Idx={best_iter}, Best Test MSE={best_test_mse:.4f}, corresponding MAE={final_test_mae:.4f}')
 

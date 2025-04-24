@@ -56,7 +56,6 @@ def read_amazon_review_raw_data_and_split(dataset_path, word_dim=100):
         data = data.drop(data[data['review_text'] == '999'].index.tolist())
         print('the number of nan', data.review_text.isnull().value_counts())
 
-        # 清洗文本
         tqdm.pandas(desc='Clean string')
         data['review_text'] = data['review_text'].progress_map(lambda x: clean_str(x))
         tqdm.pandas(desc='Delete unused words')
